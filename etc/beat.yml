@@ -1,0 +1,10 @@
+################### Generatorbeat Configuration Example #########################
+
+############################# Generatorbeat ######################################
+
+generators:
+  filebeat:
+    worker: 1
+
+output:
+  console:

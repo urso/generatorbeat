@@ -1,0 +1,8 @@
+package: github.com/urso/generatorbeat
+import:
+- package: github.com/elastic/beats
+  subpackages:
+  - /libbeat/beat
+  - libbeat/cfgfile
+  - libbeat/common
+  - libbeat/publisher
