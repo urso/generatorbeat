@@ -1,31 +1,38 @@
 BEATNAME=generatorbeat
-BEAT_DIR=github.com/urso/
+BEAT_DIR=github.com/urso
 SYSTEM_TESTS=false
 TEST_ENVIRONMENT=false
 ES_BEATS=./vendor/github.com/elastic/beats
 GOPACKAGES=$(shell glide novendor)
-BEAT_DIR=github.com/urso/
 PREFIX?=.
 
 # Path to the libbeat Makefile
-include $(ES_BEATS)/libbeat/scripts/Makefile
+-include $(ES_BEATS)/libbeat/scripts/Makefile
 
+.PHONY: init
+init:
+	glide update  --no-recursive
+	make update
+	git init
 
-.PHONY: generate
-generate:
-	python scripts/generate_template.py    etc/fields.yml    etc/generatorbeat.template.json
-	python scripts/generate_field_docs.py  etc/fields.yml    etc/generatorbeat.asciidoc
-
-.PHONY: install-cfg
-install-cfg:
-	mkdir -p $(PREFIX)
-	cp etc/generatorbeat.template.json     $(PREFIX)/generatorbeat.template.json
-	cp etc/generatorbeat.yml               $(PREFIX)/generatorbeat.yml
-	cp etc/generatorbeat.yml               $(PREFIX)/generatorbeat-linux.yml
-	cp etc/generatorbeat.yml               $(PREFIX)/generatorbeat-binary.yml
-	cp etc/generatorbeat.yml               $(PREFIX)/generatorbeat-darwin.yml
-	cp etc/generatorbeat.yml               $(PREFIX)/generatorbeat-win.yml
+.PHONY: commit
+commit:
+	git add README.md CONTRIBUTING.md
+	git commit -m "Initial commit"
+	git add LICENSE
+	git commit -m "Add the LICENSE"
+	git add .gitignore .gitattributes
+	git commit -m "Add git settings"
+	git add .
+	git reset -- .travis.yml
+	git commit -m "Add generatorbeat"
+	git add .travis.yml
+	git commit -m "Add Travis CI"
 
 .PHONY: update-deps
 update-deps:
-	glide update  --no-recursive
+	glide update --no-recursive --strip-vcs
+
+# This is called by the beats packer before building starts
+.PHONY: before-build
+before-build:

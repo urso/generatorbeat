@@ -2,9 +2,7 @@
 
 ############################# Generatorbeat ######################################
 
-generators:
-  filebeat:
-    worker: 1
-
-output:
-  console:
+generatorbeat:
+  generators:
+    filebeat:
+      worker: 1

@@ -3,6 +3,10 @@
 
 package config
 
+type Config struct {
+	Generatorbeat GeneratorbeatConfig
+}
+
 type GeneratorbeatConfig struct {
 	Generators map[string]WorkerConfig
 }

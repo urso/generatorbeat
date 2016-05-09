@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/elastic/beats/libbeat/beat"
-	"github.com/elastic/beats/libbeat/cfgfile"
 	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/publisher"
 
@@ -19,6 +18,7 @@ type Generatorbeat struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
+	client publisher.Client
 	worker []*worker
 }
 
@@ -49,13 +49,14 @@ var generators = map[string]generatorFactory{
 
 func (bt *Generatorbeat) Config(b *beat.Beat) error {
 
-	cfg := &config.GeneratorbeatConfig{}
-	err := cfgfile.Read(&cfg, "")
+	// Load beater beatConfig
+	cfg := config.Config{}
+	err := b.RawConfig.Unpack(&cfg)
 	if err != nil {
 		return fmt.Errorf("Error reading config file: %v", err)
 	}
 
-	for name, cfg := range cfg.Generators {
+	for name, cfg := range cfg.Generatorbeat.Generators {
 		factory, ok := generators[name]
 		if !ok {
 			return fmt.Errorf("Unknown generator: %v", name)
@@ -78,6 +79,8 @@ func (bt *Generatorbeat) Config(b *beat.Beat) error {
 }
 
 func (bt *Generatorbeat) Setup(b *beat.Beat) error {
+	bt.client = b.Publisher.Connect()
+
 	return nil
 }
 
@@ -86,7 +89,7 @@ func (bt *Generatorbeat) Run(b *beat.Beat) error {
 		bt.wg.Add(1)
 		go func(worker *worker) {
 			defer bt.wg.Done()
-			worker.run(b.Events)
+			worker.run(bt.client)
 		}(w)
 	}
 
@@ -99,6 +102,7 @@ func (bt *Generatorbeat) Cleanup(b *beat.Beat) error {
 }
 
 func (bt *Generatorbeat) Stop() {
+	bt.client.Close()
 	close(bt.done)
 }
 

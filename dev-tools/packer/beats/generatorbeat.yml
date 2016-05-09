@@ -1,0 +1,4 @@
+beat_name: generatorbeat
+beat_url: 'https://github.com/urso'
+beat_repo: 'github.com/urso'
+beat_description: Sends generatorbeat metrics to Logstash or directly to Elasticsearch.

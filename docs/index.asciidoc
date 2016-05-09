@@ -1,0 +1,5 @@
+= Generatorbeat Docs
+
+Welcome to the Generatorbeat documentation.
+
+
