@@ -3,14 +3,12 @@
 
 package config
 
+import "github.com/elastic/beats/libbeat/common"
+
 type Config struct {
 	Generatorbeat GeneratorbeatConfig
 }
 
 type GeneratorbeatConfig struct {
-	Generators map[string]WorkerConfig
-}
-
-type WorkerConfig struct {
-	Worker int
+	Generators map[string]*common.Config
 }

@@ -1,6 +1,7 @@
 package beater
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -30,7 +31,7 @@ type worker struct {
 
 type generatorFunc func() common.MapStr
 
-type generatorFactory func(cfg config.WorkerConfig) ([]generatorFunc, error)
+type generatorFactory func(cfg *common.Config) ([]generatorFunc, error)
 
 // Creates beater
 func New() *Generatorbeat {
@@ -122,7 +123,7 @@ func (w *worker) running() bool {
 	}
 }
 
-func genFilebeat(cfg config.WorkerConfig) ([]generatorFunc, error) {
+func genFilebeat(cfg *common.Config) ([]generatorFunc, error) {
 	text := strings.Split(`Lorem ipsum dolor sit amet, consetetur sadipscing elitr,
 sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat,
 sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet
@@ -132,40 +133,69 @@ tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At
 vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,
 no sea takimata sanctus est Lorem ipsum dolor sit amet.`, "\n")
 
-	makeGen := func() generatorFunc {
+	config := struct {
+		Worker int `config:"worker" validate:"min=1"`
+		Repeat int `config:"repeat" validate:"min=1"`
+	}{
+		Worker: 1,
+		Repeat: 1,
+	}
+	if err := cfg.Unpack(&config); err != nil {
+		return nil, err
+	}
+
+	makeGenLine := func() func() string {
 		i := 0
-		return func() common.MapStr {
+
+		nextLine := func() string {
 			line := text[i]
 			i++
 			if i >= len(text) {
 				i = 0
 			}
+			return line
+		}
 
+		return func() string {
+			if config.Repeat == 1 {
+				return nextLine()
+			}
+
+			buf := bytes.NewBuffer(nil)
+			for j := 0; j < config.Repeat; j++ {
+				buf.WriteString(nextLine())
+			}
+			return buf.String()
+		}
+	}
+
+	makeGen := func() generatorFunc {
+		genLine := makeGenLine()
+		var offset uint64
+		return func() common.MapStr {
+			line := genLine()
+			off := offset
+			offset += uint64(len(line))
 			return common.MapStr{
 				"@timestamp": common.Time(time.Now()),
 				"type":       "filebeat",
 				"message":    line,
-				"offset":     i,
+				"offset":     off,
 			}
 		}
 	}
 
-	n := 1
-	if cfg.Worker > n {
-		n = cfg.Worker
-	}
-
 	var generators []generatorFunc
-	for i := 0; i < n; i++ {
+	for i := 0; i < config.Worker; i++ {
 		generators = append(generators, makeGen())
 	}
 	return generators, nil
 }
 
-func genTopbeat(cfg config.WorkerConfig) ([]generatorFunc, error) {
+func genTopbeat(cfg *common.Config) ([]generatorFunc, error) {
 	return nil, errors.New("topbeat mode not yet implemented")
 }
 
-func genPacketbeat(cfg config.WorkerConfig) ([]generatorFunc, error) {
+func genPacketbeat(cfg *common.Config) ([]generatorFunc, error) {
 	return nil, errors.New("packetbeat mode not yet implemented")
 }
