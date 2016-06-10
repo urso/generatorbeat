@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/elastic/beats/libbeat/beat"
 	"github.com/elastic/beats/libbeat/common"
+	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/libbeat/publisher"
 
 	"github.com/urso/generatorbeat/config"
@@ -134,14 +136,24 @@ vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,
 no sea takimata sanctus est Lorem ipsum dolor sit amet.`, "\n")
 
 	config := struct {
-		Worker int `config:"worker" validate:"min=1"`
-		Repeat int `config:"repeat" validate:"min=1"`
+		Worker     int    `config:"worker" validate:"min=1"`
+		Repeat     int    `config:"repeat" validate:"min=1"`
+		SampleFile string `config:"sample_file"`
 	}{
 		Worker: 1,
 		Repeat: 1,
 	}
 	if err := cfg.Unpack(&config); err != nil {
 		return nil, err
+	}
+
+	if config.SampleFile != "" {
+		logp.Info("Read sample file: %v", config.SampleFile)
+		content, err := ioutil.ReadFile(config.SampleFile)
+		if err != nil {
+			return nil, err
+		}
+		text = strings.Split(string(content), "\n")
 	}
 
 	makeGenLine := func() func() string {
