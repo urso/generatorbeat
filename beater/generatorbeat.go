@@ -2,9 +2,12 @@ package beater
 
 import (
 	"bytes"
+	"compress/bzip2"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -149,11 +152,26 @@ no sea takimata sanctus est Lorem ipsum dolor sit amet.`, "\n")
 
 	if config.SampleFile != "" {
 		logp.Info("Read sample file: %v", config.SampleFile)
-		content, err := ioutil.ReadFile(config.SampleFile)
-		if err != nil {
-			return nil, err
+
+		if filepath.Ext(config.SampleFile) == ".bz2" {
+			f, err := os.Open(config.SampleFile)
+			if err != nil {
+				return nil, err
+			}
+			defer f.Close()
+
+			content, err := ioutil.ReadAll(bzip2.NewReader(f))
+			if err != nil {
+				return nil, err
+			}
+			text = strings.Split(string(content), "\n")
+		} else {
+			content, err := ioutil.ReadFile(config.SampleFile)
+			if err != nil {
+				return nil, err
+			}
+			text = strings.Split(string(content), "\n")
 		}
-		text = strings.Split(string(content), "\n")
 	}
 
 	makeGenLine := func() func() string {
