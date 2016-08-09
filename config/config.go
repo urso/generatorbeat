@@ -6,9 +6,7 @@ package config
 import "github.com/elastic/beats/libbeat/common"
 
 type Config struct {
-	Generatorbeat GeneratorbeatConfig
-}
-
-type GeneratorbeatConfig struct {
 	Generators map[string]*common.Config
 }
+
+var DefaultConfig = Config{}

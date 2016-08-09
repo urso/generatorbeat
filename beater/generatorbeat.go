@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/bzip2"
 	"errors"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -38,12 +39,9 @@ type generatorFunc func() common.MapStr
 
 type generatorFactory func(cfg *common.Config) ([]generatorFunc, error)
 
-// Creates beater
-func New() *Generatorbeat {
-	return &Generatorbeat{
-		done: make(chan struct{}),
-	}
-}
+var (
+	max = flag.Int("max", -1, "Quit after pushing 'max' events")
+)
 
 var generators = map[string]generatorFactory{
 	"filebeat":   genFilebeat,
@@ -51,46 +49,45 @@ var generators = map[string]generatorFactory{
 	"packetbeat": genPacketbeat,
 }
 
-/// *** Beater interface methods ***///
-
-func (bt *Generatorbeat) Config(b *beat.Beat) error {
-
-	// Load beater beatConfig
-	cfg := config.Config{}
-	err := b.RawConfig.Unpack(&cfg)
+// Creates beater
+func New(b *beat.Beat, rawConfig *common.Config) (beat.Beater, error) {
+	cfg := config.DefaultConfig
+	err := rawConfig.Unpack(&cfg)
 	if err != nil {
-		return fmt.Errorf("Error reading config file: %v", err)
+		return nil, fmt.Errorf("Error reading config file: %v", err)
 	}
 
-	for name, cfg := range cfg.Generatorbeat.Generators {
+	done := make(chan struct{})
+
+	workers := []*worker{}
+	for name, cfg := range cfg.Generators {
 		factory, ok := generators[name]
 		if !ok {
-			return fmt.Errorf("Unknown generator: %v", name)
+			return nil, fmt.Errorf("Unknown generator: %v", name)
 		}
 
 		generators, err := factory(cfg)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		for _, gen := range generators {
-			bt.worker = append(bt.worker, &worker{
-				done: bt.done,
+			workers = append(workers, &worker{
+				done: done,
 				gen:  gen,
 			})
 		}
 	}
 
-	return nil
-}
-
-func (bt *Generatorbeat) Setup(b *beat.Beat) error {
-	bt.client = b.Publisher.Connect()
-
-	return nil
+	return &Generatorbeat{
+		done:   done,
+		worker: workers,
+	}, nil
 }
 
 func (bt *Generatorbeat) Run(b *beat.Beat) error {
+	bt.client = b.Publisher.Connect()
+
 	for _, w := range bt.worker {
 		bt.wg.Add(1)
 		go func(worker *worker) {
@@ -103,20 +100,26 @@ func (bt *Generatorbeat) Run(b *beat.Beat) error {
 	return nil
 }
 
-func (bt *Generatorbeat) Cleanup(b *beat.Beat) error {
-	return nil
-}
-
 func (bt *Generatorbeat) Stop() {
 	bt.client.Close()
 	close(bt.done)
 }
 
 func (w *worker) run(client publisher.Client) {
-	for w.running() {
-		event := w.gen()
-		client.PublishEvent(event)
+	if *max > 0 {
+		m := *max
+		for w.running() && m >= 0 {
+			event := w.gen()
+			client.PublishEvent(event)
+			m--
+		}
+	} else {
+		for w.running() {
+			event := w.gen()
+			client.PublishEvent(event)
+		}
 	}
+
 }
 
 func (w *worker) running() bool {
