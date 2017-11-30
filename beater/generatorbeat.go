@@ -16,7 +16,6 @@ import (
 	"github.com/elastic/beats/libbeat/beat"
 	"github.com/elastic/beats/libbeat/common"
 	"github.com/elastic/beats/libbeat/logp"
-	"github.com/elastic/beats/libbeat/publisher"
 
 	"github.com/urso/generatorbeat/config"
 )
@@ -25,17 +24,16 @@ type Generatorbeat struct {
 	wg   sync.WaitGroup
 	done chan struct{}
 
-	client publisher.Client
 	worker []*worker
 }
 
 type worker struct {
 	done <-chan struct{}
 	name string
-	gen  func() common.MapStr
+	gen  generatorFunc
 }
 
-type generatorFunc func() common.MapStr
+type generatorFunc func() beat.Event
 
 type generatorFactory func(cfg *common.Config) ([]generatorFunc, error)
 
@@ -86,13 +84,17 @@ func New(b *beat.Beat, rawConfig *common.Config) (beat.Beater, error) {
 }
 
 func (bt *Generatorbeat) Run(b *beat.Beat) error {
-	bt.client = b.Publisher.Connect()
-
 	for _, w := range bt.worker {
 		bt.wg.Add(1)
+
+		client, err := b.Publisher.Connect()
+		if err != nil {
+			return err
+		}
+
 		go func(worker *worker) {
 			defer bt.wg.Done()
-			worker.run(bt.client)
+			worker.run(client)
 		}(w)
 	}
 
@@ -101,24 +103,32 @@ func (bt *Generatorbeat) Run(b *beat.Beat) error {
 }
 
 func (bt *Generatorbeat) Stop() {
-	bt.client.Close()
 	close(bt.done)
 }
 
-func (w *worker) run(client publisher.Client) {
+func (w *worker) run(client beat.Client) {
+	go func() {
+		<-w.done
+		client.Close()
+	}()
+
 	if *max > 0 {
 		m := *max
 		for w.running() && m >= 0 {
 			event := w.gen()
-			client.PublishEvent(event)
+			client.Publish(event)
 			m--
 		}
 	} else {
 		for w.running() {
 			event := w.gen()
-			client.PublishEvent(event)
+			client.Publish(event)
 		}
 	}
+
+}
+
+func (w *worker) Stop() {
 
 }
 
@@ -205,15 +215,17 @@ no sea takimata sanctus est Lorem ipsum dolor sit amet.`, "\n")
 	makeGen := func() generatorFunc {
 		genLine := makeGenLine()
 		var offset uint64
-		return func() common.MapStr {
+		return func() beat.Event {
 			line := genLine()
 			off := offset
 			offset += uint64(len(line))
-			return common.MapStr{
-				"@timestamp": common.Time(time.Now()),
-				"type":       "filebeat",
-				"message":    line,
-				"offset":     off,
+			return beat.Event{
+				Timestamp: time.Now(),
+				Fields: common.MapStr{
+					"type":    "filebeat",
+					"message": line,
+					"offset":  off,
+				},
 			}
 		}
 	}
