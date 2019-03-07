@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/elastic/beats/libbeat/cmd"
+	"github.com/elastic/beats/libbeat/cmd/instance"
 
 	"github.com/urso/generatorbeat/beater"
 )
@@ -11,7 +12,10 @@ import (
 const name = "generatorbeat"
 
 func main() {
-	if err := cmd.GenRootCmd(name, "", beater.New).Execute(); err != nil {
+	rootCmd := cmd.GenRootCmdWithSettings(beater.New, instance.Settings{
+		Name: "generatorbeat",
+	})
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
